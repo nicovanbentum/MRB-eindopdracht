@@ -1,13 +1,20 @@
 # import the necessary packages
-from collections import deque
 from imutils.video import VideoStream
+from pyfirmata import Arduino, util
+from collections import deque
 import numpy as np
 import argparse
-import cv2
 import imutils
 import time
-import pyfirmata
- 
+import cv2
+import re
+
+import input_thread
+
+def print_help_info():
+	print("To change the lower color bound format your input like: lowerColor %d %d %d")
+	print("To change the upper color bound format your input like: upperColor %d %d %d")
+
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video",
@@ -16,11 +23,11 @@ ap.add_argument("-b", "--buffer", type=int, default=64,
 	help="max buffer size")
 args = vars(ap.parse_args())
 
-# define the lower and upper boundaries of the "green"
+# define the lower and upper boundaries of the coloured
 # ball in the HSV color space, then initialize the
 # list of tracked points
-greenLower = (29, 86, 6)
-greenUpper = (64, 255, 255)
+colorLower = (5, 155, 50)
+colorUpper = (15, 255, 255)
 pts = deque(maxlen=args["buffer"])
  
 # if a video path was not supplied, grab the reference
@@ -35,8 +42,26 @@ else:
 # allow the camera or video file to warm up
 time.sleep(2.0)
 
+kbd_queue = input_thread.launch_thread()
+
 # keep looping
 while True:
+	input_str = input_thread.get_kbd_string(kbd_queue)
+	if input_str:
+		if re.match('help', input_str):
+			print_help_info()
+		elif re.match('lowerColor.\d.\d.\d', input_str):
+			values = input_str.split()
+			colorLower = (int(values[1]), int(values[2]), int(values[3]))
+		elif re.match('upperColor.\d.\d.\d', input_str):
+			values = input_str.split()
+			colorUpper = (int(values[1]), int(values[2]), int(values[3]))
+		elif re.match('exit', input_str):
+			exit()
+		else:
+			print("incorrect formatting, try again.")
+			continue
+
 	# grab the current frame
 	frame = vs.read()
  
@@ -57,7 +82,7 @@ while True:
 	# construct a mask for the color "green", then perform
 	# a series of dilations and erosions to remove any small
 	# blobs left in the mask
-	mask = cv2.inRange(hsv, greenLower, greenUpper)
+	mask = cv2.inRange(hsv, colorLower, colorUpper)
 	mask = cv2.erode(mask, None, iterations=2)
 	mask = cv2.dilate(mask, None, iterations=2)
 
